@@ -280,7 +280,6 @@ function cannonStatsForTier(tier, type='normal'){
 
 
 
-  const baseCannon
 
   const baseCannon = {
     dmg: 16,
@@ -428,7 +427,7 @@ function updateFire(dt){
   if(!target) return;
 
   const {tier, type} = getEquippedCannon();
-  const st = cannonStatsForTierAndType(tier, type);
+  const st = cannonStatsForTier(tier, type);
 
   player.fireAcc += dt;
   const interval = 1/Math.max(2.0, st.fireRate);
@@ -1210,7 +1209,9 @@ function renderBag(){
     };
     overlay.querySelector('#muteToggle').onclick=()=>{
       soundOn=!soundOn;
-      showStart();
+overlay.style.display = 'flex';
+      overlay.style.display = 'flex';
+showStart();
       syncHUD();
     };
   }
@@ -1345,7 +1346,9 @@ function renderBag(){
     resize();
     await loadAssets();
     state=STATE.START;
-    showStart();
+overlay.style.display = 'flex';
+    overlay.style.display = 'flex';
+showStart();
     requestAnimationFrame(loop);
   }
   boot();
