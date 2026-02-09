@@ -1,0 +1,1356 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+<title>真·向僵尸开炮（H5｜稀有度升级+拖拽合成）</title>
+<style>
+  html,body{margin:0;height:100%;background:#070a0e;overflow:hidden;font-family:system-ui,-apple-system,Segoe UI,Roboto,"PingFang SC","Microsoft YaHei",sans-serif;}
+  canvas{display:block;touch-action:none;background:radial-gradient(1200px 700px at 50% 15%, #16202b 0%, #0b0f14 55%, #070a0e 100%);}
+  .hud{
+    position:fixed;left:0;right:0;top:0;z-index:5;
+    padding:10px 12px;display:flex;gap:10px;align-items:flex-start;justify-content:space-between;
+    color:#eaf2ff;font-weight:800;
+    background:linear-gradient(180deg,rgba(0,0,0,.62),rgba(0,0,0,0));
+    pointer-events:none;
+  }
+  .col{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .pill{
+    pointer-events:auto; user-select:none;
+    background:rgba(255,255,255,.07);
+    border:1px solid rgba(255,255,255,.12);
+    backdrop-filter: blur(10px);
+    padding:6px 10px;border-radius:999px;
+    display:flex;gap:8px;align-items:center;
+    font-size:13px;
+  }
+  .btn{cursor:pointer}
+  .btn:active{transform:translateY(1px)}
+  .accent{background:linear-gradient(180deg,rgba(0,255,204,.22),rgba(0,255,204,.06));border:1px solid rgba(0,255,204,.45);}
+  .danger{background:linear-gradient(180deg,rgba(255,90,90,.22),rgba(255,90,90,.06));border:1px solid rgba(255,90,90,.45);}
+  .muted{opacity:.9;font-weight:700}
+  #overlay{
+    position:fixed;inset:0;z-index:10;
+    display:none;align-items:center;justify-content:center;
+    background:rgba(0,0,0,.58);
+  }
+  .panel{
+    width:min(760px,92vw);
+    background:rgba(14,20,28,.93);
+    border:1px solid rgba(255,255,255,.12);
+    border-radius:18px;
+    padding:14px;
+    color:#eaf2ff;
+    box-shadow:0 18px 60px rgba(0,0,0,.55);
+  }
+  .panel h2{margin:8px 0 6px;font-size:18px}
+  .small{font-size:13px;opacity:.9;line-height:1.55}
+  .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;align-items:center}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px}
+  .card{
+    background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.1);
+    border-radius:14px;padding:10px;
+    cursor:pointer;
+    position:relative;
+  }
+  .card:hover{border-color:rgba(255,255,255,.18)}
+  .card b{display:block;margin-bottom:6px}
+  .tag{
+    display:inline-flex;gap:6px;align-items:center;
+    padding:3px 8px;border-radius:999px;
+    border:1px solid rgba(255,255,255,.14);
+    background:rgba(255,255,255,.06);
+    font-size:12px;opacity:.95
+  }
+  .hint{
+    position:fixed;bottom:10px;left:50%;transform:translateX(-50%);
+    z-index:6;
+    color:rgba(234,242,255,.85);font-size:13px;
+    background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);
+    padding:6px 10px;border-radius:999px;
+  }
+
+  /* Inventory / merge grid */
+  .invWrap{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px}
+  .invGrid{
+    display:grid;
+    grid-template-columns:repeat(5,64px);
+    gap:10px;
+    padding:10px;
+    background:rgba(255,255,255,.05);
+    border:1px solid rgba(255,255,255,.1);
+    border-radius:14px;
+  }
+  .slot{
+    width:64px;height:64px;border-radius:12px;
+    border:1px dashed rgba(255,255,255,.18);
+    background:rgba(0,0,0,.18);
+    position:relative;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .slot.equip{border-style:solid;border-color:rgba(0,255,204,.55)}
+  .slot .lv{
+    position:absolute;right:6px;bottom:5px;
+    font-size:12px;font-weight:900;
+    padding:2px 6px;border-radius:999px;
+    background:rgba(0,0,0,.55);
+    border:1px solid rgba(255,255,255,.18);
+  }
+  .slot .badge{
+    position:absolute;left:6px;top:5px;
+    font-size:11px;font-weight:900;
+    padding:2px 6px;border-radius:999px;
+    background:rgba(0,0,0,.55);
+    border:1px solid rgba(255,255,255,.18);
+    opacity:.9;
+  }
+  .ghost{
+    position:fixed;z-index:9999;
+    width:64px;height:64px;pointer-events:none;
+    transform:translate(-50%,-50%);
+    filter:drop-shadow(0 10px 16px rgba(0,0,0,.6));
+  }
+
+  /* rarity borders */
+  .rar-common{border-color:rgba(255,255,255,.16)}
+  .rar-rare{border-color:rgba(120,200,255,.65)}
+  .rar-epic{border-color:rgba(200,120,255,.75)}
+  .rarTag-common{border-color:rgba(255,255,255,.18)}
+  .rarTag-rare{border-color:rgba(120,200,255,.65);color:rgba(170,220,255,.95)}
+  .rarTag-epic{border-color:rgba(200,120,255,.75);color:rgba(225,185,255,.98)}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+
+<div class="hud">
+  <div class="col">
+    <div class="pill"><span>波次</span><span id="wave">1</span></div>
+    <div class="pill"><span>分数</span><span id="score">0</span></div>
+    <div class="pill"><span>金币</span><span id="coins">0</span></div>
+    <div class="pill muted"><span>炮阶</span><span id="tier">1</span></div>
+    <div class="pill muted"><span>血量</span><span id="hp">100</span></div>
+  </div>
+  <div class="col">
+    <div class="pill btn accent" id="btnPause">暂停</div>
+    <div class="pill btn accent" id="btnBag">背包/合成</div>
+    <div class="pill btn danger" id="btnMute">声音：开</div>
+  </div>
+</div>
+
+<div id="overlay"></div>
+<div class="hint" id="hint">自动锁定最近目标 + 自动射击｜每波：宝箱 + 三选一（带稀有度&可叠等级）｜背包拖拽两把同阶炮=合成高一阶</div>
+
+<script>
+(() => {
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const $ = (id)=>document.getElementById(id);
+
+  // ===== canvas resize =====
+  function resize() {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = window.innerWidth, h = window.innerHeight;
+    cv.style.width = w+'px'; cv.style.height = h+'px';
+    cv.width = Math.floor(w*dpr); cv.height = Math.floor(h*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  window.addEventListener('resize', resize);
+
+  const W = ()=>window.innerWidth;
+  const H = ()=>window.innerHeight;
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const rand=(a,b)=>a+Math.random()*(b-a);
+  const dist2=(ax,ay,bx,by)=>{const dx=ax-bx,dy=ay-by; return dx*dx+dy*dy;};
+
+  // ===== assets (use your cut+scaled png) =====
+  const ASSET_PATH = './assets/';
+  const IMG = {};
+  const IMG_SRC = {
+    zombie: ASSET_PATH+'zombie.png',
+    boss:   ASSET_PATH+'boss.png',
+    cannon: ASSET_PATH+'cannon.png',
+    bullet: ASSET_PATH+'bullet.png',
+    coin:   ASSET_PATH+'coin.png',
+    chest:  ASSET_PATH+'chest.png',
+    part:   ASSET_PATH+'part.png'
+  };
+  function loadImage(src){
+    return new Promise(res=>{
+      const im=new Image();
+      im.onload=()=>res(im);
+      im.onerror=()=>res(null);
+      im.src=src;
+    });
+  }
+  async function loadAssets(){
+    for (const k of Object.keys(IMG_SRC)) IMG[k]=await loadImage(IMG_SRC[k]);
+  }
+
+  // ===== audio (simple beeps; WeChat requires first gesture) =====
+  let soundOn=true;
+  let audioCtx=null;
+  function ensureAudio(){
+    if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  }
+  function sfx(type='shoot'){
+    if(!soundOn) return;
+    ensureAudio();
+    if(audioCtx.state==='suspended') audioCtx.resume();
+    const o=audioCtx.createOscillator();
+    const g=audioCtx.createGain();
+    const t=audioCtx.currentTime;
+    if(type==='shoot'){
+      o.type='square';
+      o.frequency.setValueAtTime(520,t);
+      o.frequency.exponentialRampToValueAtTime(280,t+0.05);
+      g.gain.setValueAtTime(0.06,t);
+      g.gain.exponentialRampToValueAtTime(0.001,t+0.06);
+    }else if(type==='boom'){
+      o.type='sawtooth';
+      o.frequency.setValueAtTime(180,t);
+      o.frequency.exponentialRampToValueAtTime(70,t+0.14);
+      g.gain.setValueAtTime(0.12,t);
+      g.gain.exponentialRampToValueAtTime(0.001,t+0.16);
+    }else if(type==='pick'){
+      o.type='triangle';
+      o.frequency.setValueAtTime(880,t);
+      o.frequency.exponentialRampToValueAtTime(660,t+0.06);
+      g.gain.setValueAtTime(0.06,t);
+      g.gain.exponentialRampToValueAtTime(0.001,t+0.08);
+    }else if(type==='card'){
+      o.type='sine';
+      o.frequency.setValueAtTime(740,t);
+      o.frequency.exponentialRampToValueAtTime(1040,t+0.09);
+      g.gain.setValueAtTime(0.08,t);
+      g.gain.exponentialRampToValueAtTime(0.001,t+0.12);
+    }
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(t); o.stop(t+0.22);
+  }
+  cv.addEventListener('pointerdown', ()=>{ if(soundOn){ ensureAudio(); audioCtx.resume(); } }, {once:true});
+
+  // ===== UI =====
+  const overlay=$('overlay');
+  const elWave=$('wave'), elScore=$('score'), elCoins=$('coins'), elTier=$('tier'), elHp=$('hp');
+  const btnPause=$('btnPause'), btnBag=$('btnBag'), btnMute=$('btnMute');
+
+  // ===== game state =====
+  const STATE={START:'start',PLAY:'play',PAUSE:'pause',CHEST:'chest',UPGRADE:'upgrade',BAG:'bag',OVER:'over'};
+  let state=STATE.START;
+
+  let score=0, coins=0, hp=100, wave=1;
+
+  // ===== “真合成”背包：拖拽两把同阶炮 -> 高一阶 =====
+  const INV_SIZE=20;                 // 5*4
+  const inv=new Array(INV_SIZE).fill(null); // each: {tier:int}
+  let equippedSlot=0;                // slot0 is “装备位”
+  inv[equippedSlot]={tier:1,type:'normal'};
+
+  function getEquippedTier(){
+    const it = inv[equippedSlot];
+    return it?it.tier:1;
+  }
+
+function getEquippedType(){
+  const it = inv[equippedSlot];
+  return it?.type || 'normal';
+}
+function getEquippedCannon(){
+  const it = inv[equippedSlot] || {tier:1,type:'normal'};
+  return {tier: it.tier||1, type: it.type||'normal'};
+}
+
+
+// cannon stats scale with tier
+function cannonStatsForTier(tier, type='normal'){
+  const t = CANNON_TYPES[type] || CANNON_TYPES.normal;
+  const mult = 1 + (tier-1)*0.28;             // 越高阶越猛
+  return {
+    dmg: baseCannon.dmg * mult * t.dmgMul,
+    fireRate: baseCannon.fireRate * (1 + (tier-1)*0.10) * t.rateMul,
+    bulletSpeed: baseCannon.bulletSpeed * (1 + (tier-1)*0.05) * t.speedMul,
+    pellets: t.pellets,
+    spread: t.spread,
+    rocket: t.rocket,
+    laser: t.laser,
+  };
+}
+
+
+
+  const baseCannon
+
+  const baseCannon = {
+    dmg: 16,
+    fireRate: 6.2,
+    bulletSpeed: 980,
+    pierce: 0,
+    crit: 0.08,
+    critMul: 1.6,
+  };
+
+
+// ===== cannon types (routes) =====
+const CANNON_TYPES = {
+  normal:  {name:'机炮',  badge:'N', dmgMul:1.00, rateMul:1.00, speedMul:1.00, pellets:1, spread:0.00, rocket:false, laser:false},
+  shotgun: {name:'散弹',  badge:'S', dmgMul:0.55, rateMul:0.85, speedMul:1.00, pellets:5, spread:0.22, rocket:false, laser:false},
+  laser:   {name:'激光',  badge:'L', dmgMul:0.32, rateMul:7.50, speedMul:1.90, pellets:1, spread:0.00, rocket:false, laser:true},
+  rocket:  {name:'火箭',  badge:'R', dmgMul:2.15, rateMul:0.55, speedMul:0.78, pellets:1, spread:0.00, rocket:true,  laser:false},
+};
+
+// different-type merge recipes (same tier)
+function mergeResultType(a,b){
+  if(a===b) return a;
+  // cyclic recipe:
+  // S + L => R, L + R => S, R + S => L
+  const set = new Set([a,b]);
+  if(set.has('shotgun') && set.has('laser')) return 'rocket';
+  if(set.has('laser') && set.has('rocket')) return 'shotgun';
+  if(set.has('rocket') && set.has('shotgun')) return 'laser';
+  return 'normal';
+}
+
+function rollCannonType(isBoss=false){
+  // make specials show up more as waves go up
+  const w = wave;
+  let pN=0.70, pS=0.18, pL=0.08, pR=0.04;
+  if(w>=6){ pN=0.55; pS=0.22; pL=0.15; pR=0.08; }
+  if(w>=12){ pN=0.42; pS=0.25; pL=0.20; pR=0.13; }
+  if(isBoss){ pN=0.25; pS=0.28; pL=0.27; pR=0.20; }
+
+  const r=Math.random();
+  const a=pN, b=pN+pS, c=pN+pS+pL;
+  if(r<a) return 'normal';
+  if(r<b) return 'shotgun';
+  if(r<c) return 'laser';
+  return 'rocket';
+}
+
+// short-lived beam visuals for laser
+const beams=[]; // {x1,y1,x2,y2,t,life}
+
+  // upgrades have levels (stacking)
+  const upLv = {}; // key -> level
+
+  // entities
+  const zombies=[], bullets=[], drops=[], particles=[], floaters=[];
+  let spawnLeft=0, spawnCD=0;
+
+  // player
+  const player={
+    x:0,y:0,
+    angle:-Math.PI/2,
+    fireAcc:0,
+  };
+
+  // drops types: coin/part/chest/cannon
+  function addFloater(x,y,txt,color='rgba(255,255,255,.92)'){
+    floaters.push({x,y,txt,color,t:0,life:0.9});
+  }
+  function explode(x,y,n=18,power=1){
+    for(let i=0;i<n;i++){
+      particles.push({x,y,vx:rand(-240,240)*power,vy:rand(-240,240)*power,r:rand(1.1,3.1)*power,t:0,life:rand(0.22,0.55)});
+    }
+    sfx('boom');
+  }
+
+  // ===== wave =====
+  function calcWaveCount(){ return Math.floor(12 + wave*3.0); }
+  function startWave(){
+    spawnLeft = calcWaveCount();
+    spawnCD = 0.10;
+    addFloater(W()/2, 120, `第 ${wave} 波`, 'rgba(0,255,204,.95)');
+  }
+
+  function spawnZombie(isBoss=false){
+    const r = isBoss ? 46 : rand(22,30);
+    const x = rand(r+16, W()-r-16);
+    const y = -r-10;
+    const baseSpeed = isBoss ? (55 + wave*4) : (75 + wave*7);
+    const hpMax = isBoss ? (760 + wave*120) : (95 + wave*20);
+    zombies.push({x,y,r,vx:rand(-10,10),vy:baseSpeed,hp:hpMax,hpMax,boss:isBoss});
+  }
+
+  function maybeBossSpawn(){
+    if(wave%5!==0) return false;
+    // spawn boss when half left and no boss present
+    const bossExists = zombies.some(z=>z.boss);
+    if(!bossExists && spawnLeft === Math.max(1, Math.floor(calcWaveCount()*0.45))){
+      spawnZombie(true);
+      addFloater(W()/2, 150, 'BOSS 登场！', 'rgba(255,120,80,.95)');
+      return true;
+    }
+    return false;
+  }
+
+  function finishWave(){
+    // drop a chest in middle, go chest state
+    drops.push({type:'chest', x:W()/2, y:H()/2-40, vx:0, vy:0, r:30, life:999});
+    state=STATE.CHEST;
+    openChestPanel();
+  }
+
+  // ===== targeting (nearest) =====
+  function nearestZombie(){
+    if(!zombies.length) return null;
+    let best=null, bestD=1e18;
+    for(const z of zombies){
+      const d=dist2(player.x,player.y,z.x,z.y);
+      if(d<bestD){bestD=d;best=z;}
+    }
+    return best;
+  }
+  function updateAim(dt){
+    const z=nearestZombie();
+    let tx = z?z.x:W()/2, ty=z?z.y:H()/2;
+    const dx=tx-player.x, dy=ty-player.y;
+    const target=Math.atan2(dy,dx);
+    let a=player.angle;
+    let diff=target-a;
+    while(diff>Math.PI) diff-=Math.PI*2;
+    while(diff<-Math.PI) diff+=Math.PI*2;
+    a += diff * clamp(dt*10,0,1);
+    player.angle=a;
+  }
+
+  // ===== fire (auto) =====
+  function critDamage(base){
+    const crit = Math.random() < baseCannon.crit;
+    return {dmg: crit? base*baseCannon.critMul : base, crit};
+  }
+
+  
+function updateFire(dt){
+  if(state!==STATE.PLAY) return;
+  const target=nearestZombie();
+  if(!target) return;
+
+  const {tier, type} = getEquippedCannon();
+  const st = cannonStatsForTierAndType(tier, type);
+
+  player.fireAcc += dt;
+  const interval = 1/Math.max(2.0, st.fireRate);
+
+  while(player.fireAcc >= interval){
+    player.fireAcc -= interval;
+
+    const baseAng = player.angle;
+    const sx = player.x + Math.cos(baseAng)*44;
+    const sy = player.y + Math.sin(baseAng)*44;
+
+    // LASER: hitscan-ish rapid ticks + beam visual
+    if(st.laser){
+      // deal damage to nearest target, with a tiny chain (pierce feeling)
+      const chain = Math.min(1 + Math.floor(tier/3), 3);
+      let hit = target;
+      for(let c=0;c<chain;c++){
+        if(!hit) break;
+        const {dmg, crit} = critDamage(st.dmg);
+        hit.hp -= dmg;
+        if(crit) particles.push({x:hit.x,y:hit.y,vx:0,vy:0,r:3.2,t:0,life:0.12});
+        // beam effect
+        beams.push({x1:sx,y1:sy,x2:hit.x,y2:hit.y,t:0,life:0.10});
+        // find next closest to this hit
+        let next=null, bestD=1e18;
+        for(const z of zombies){
+          if(z===hit) continue;
+          const d=dist2(hit.x,hit.y,z.x,z.y);
+          if(d<bestD){ bestD=d; next=z; }
+        }
+        if(hit.hp<=0){ onZombieKilled(hit, hit.x, hit.y); }
+        hit = next;
+      }
+      sfx('shoot');
+      continue;
+    }
+
+    // SHOTGUN: multiple pellets spread
+    const pellets = Math.max(1, st.pellets|0);
+    for(let i=0;i<pellets;i++){
+      const off = (pellets===1)?0:((i-(pellets-1)/2) * st.spread * 0.55) + rand(-st.spread*0.25, st.spread*0.25);
+      const ang = baseAng + off;
+      const {dmg, crit} = critDamage(st.dmg);
+      bullets.push({
+        x:sx,y:sy,
+        vx:Math.cos(ang)*st.bulletSpeed,
+        vy:Math.sin(ang)*st.bulletSpeed,
+        ang,
+        dmg,
+        crit,
+        kind: st.rocket ? 'rocket' : (pellets>1 ? 'pellet' : 'bullet'),
+        pierceLeft: baseCannon.pierce,
+        t:0, life: st.rocket ? 1.6 : 1.25,
+        splash: st.rocket ? (90 + tier*6) : 0
+      });
+    }
+    sfx('shoot');
+  }
+}
+
+
+  function updateBullets(dt){
+    for(let i=bullets.length-1;i>=0;i--){
+      const b=bullets[i];
+      b.t+=dt;
+      b.x += b.vx*dt; b.y += b.vy*dt;
+      particles.push({x:b.x,y:b.y,vx:rand(-30,30),vy:rand(-30,30),r:rand(0.8,1.6),t:0,life:rand(0.12,0.22)});
+      if(b.t>b.life || b.x<-80||b.x>W()+80||b.y<-80||b.y>H()+80) bullets.splice(i,1);
+    }
+  }
+
+  function updateZombies(dt){
+    for(let i=zombies.length-1;i>=0;i--){
+      const z=zombies[i];
+      z.x += z.vx*dt; z.y += z.vy*dt;
+      if(z.y > H()-96){
+        const hurt = z.boss?24:12;
+        hp -= hurt;
+        explode(z.x,z.y, z.boss?60:20, z.boss?1.6:1.0);
+        addFloater(z.x,z.y-10,`-${hurt}`,'rgba(255,90,90,.95)');
+        zombies.splice(i,1);
+      }
+    }
+  }
+
+  function dropLoot(x,y,boss=false){
+  // coins
+  const c = boss ? 7 : (Math.random()<0.55 ? 1 : 2);
+  for(let i=0;i<c;i++) drops.push({type:'coin',x,y,vx:rand(-140,140),vy:rand(-220,-80),r:14,life:6});
+
+  // parts (reserved)
+  const p = boss ? 4 : (Math.random()<0.42 ? 1 : 0);
+  for(let i=0;i<p;i++) drops.push({type:'part',x,y,vx:rand(-160,160),vy:rand(-240,-100),r:13,life:6});
+
+  // cannon card (more dense / more addictive)
+  const base = boss ? 0.75 : 0.20;
+  const extra = Math.min(0.14, wave*0.006);        // wave higher -> more drop
+  const cannonChance = clamp(base + extra, 0, boss?0.90:0.38);
+
+  if(Math.random()<cannonChance){
+    const tier = Math.max(1, Math.min(6, 1 + Math.floor(wave/5)));
+    const cType = rollCannonType(boss);
+    drops.push({type:'cannon', x, y, vx:rand(-120,120), vy:rand(-220,-120), r:18, life:8, tier, cType});
+  }
+}
+
+
+
+  
+let kills=0;
+
+function onZombieKilled(z, x, y){
+  score += z.boss ? 70 : 10;
+  addFloater(x,y-8, z.boss?'+70':'+10', 'rgba(255,230,120,.95)');
+  explode(x,y, z.boss?70:26, z.boss?1.8:1.0);
+  dropLoot(x,y,z.boss);
+
+  // cadence: every 10 kills guarantee a cannon drop near player (merge爽感更密)
+  kills++;
+  if(kills % 10 === 0){
+    const tier = Math.max(1, Math.min(6, 1 + Math.floor(wave/5)));
+    const cType = rollCannonType(false);
+    drops.push({type:'cannon', x: player.x+rand(-40,40), y: player.y-120, vx:rand(-60,60), vy:rand(-220,-120), r:18, life:8, tier, cType});
+    addFloater(player.x, player.y-150, '连杀奖励：炮卡！', 'rgba(0,255,204,.95)');
+  }
+}
+
+
+function handleHits(){
+  for(let bi=bullets.length-1;bi>=0;bi--){
+    const b=bullets[bi];
+    let hit=-1, bestD=1e18;
+    for(let zi=0;zi<zombies.length;zi++){
+      const z=zombies[zi];
+      const rr=z.r*1.05;
+      const d=dist2(b.x,b.y,z.x,z.y);
+      if(d<rr*rr && d<bestD){ bestD=d; hit=zi; }
+    }
+    if(hit<0) continue;
+
+    const z=zombies[hit];
+
+    // apply damage
+    z.hp -= b.dmg;
+
+    // rocket splash
+    if(b.kind==='rocket' && b.splash>0){
+      const R=b.splash;
+      for(const zz of zombies){
+        if(zz===z) continue;
+        const d=dist2(zz.x,zz.y,z.x,z.y);
+        if(d < R*R){
+          zz.hp -= b.dmg*0.45;
+        }
+      }
+      explode(z.x,z.y, 18, 1.1);
+    }
+
+    // hit fx
+    particles.push({x:b.x,y:b.y,vx:rand(-180,180),vy:rand(-180,180),r:rand(1.2,2.8),t:0,life:rand(0.14,0.30)});
+
+    // kill
+    if(z.hp<=0){
+      const x=z.x, y=z.y;
+      zombies.splice(hit,1);
+      onZombieKilled(z,x,y);
+    }
+
+    // pierce
+    if(b.pierceLeft>0){
+      b.pierceLeft -= 1;
+    }else{
+      bullets.splice(bi,1);
+    }
+  }
+}
+
+
+
+  function updateDrops(dt){
+    for(let i=drops.length-1;i>=0;i--){
+      const d=drops[i];
+      if(d.type!=='chest'){
+        d.life -= dt;
+        d.vy += 520*dt;
+        d.x += d.vx*dt;
+        d.y += d.vy*dt;
+        const floor = H()-86;
+        if(d.y>floor){ d.y=floor; d.vy*=-0.32; d.vx*=0.65; }
+        if(d.life<=0) drops.splice(i,1);
+      }
+    }
+  }
+
+  function pickupDrop(d){
+  if(d.type==='coin'){ coins+=1; sfx('pick'); }
+  if(d.type==='part'){ coins+=0; sfx('pick'); } // reserved
+  if(d.type==='cannon'){
+    sfx('card');
+    const tier = d.tier || 1;
+    const tp = d.cType || 'normal';
+    const ok = addCannonToInv(tier, tp);
+    const nm = CANNON_TYPES[tp]?.name || '机炮';
+    addFloater(d.x,d.y-10, ok?`+炮卡 T${tier}（${nm}）`:'背包满了','rgba(0,255,204,.95)');
+  }
+}
+
+
+
+  function addCannonToInv(tier, type='normal'){
+  for(let i=1;i<INV_SIZE;i++){
+    if(!inv[i]){ inv[i]={tier, type}; return true; }
+  }
+  return false;
+}
+
+
+
+  function tryPickupAt(x,y){
+    // click pickup for coin/part/cannon; chest uses panel button
+    for(let i=drops.length-1;i>=0;i--){
+      const d=drops[i];
+      if(d.type==='chest') continue;
+      const rr = (d.r||14)*2;
+      if(dist2(x,y,d.x,d.y) < rr*rr){
+        pickupDrop(d);
+        drops.splice(i,1);
+        break;
+      }
+    }
+  }
+
+  // ===== particles / floaters =====
+  function updateParticles(dt){
+    for(let i=particles.length-1;i>=0;i--){
+      const p=particles[i];
+      p.t+=dt;
+      p.x+=p.vx*dt; p.y+=p.vy*dt;
+      p.vx*=0.98; p.vy*=0.98;
+      if(p.t>p.life) particles.splice(i,1);
+    }
+  }
+function updateBeams(dt){
+  for(let i=beams.length-1;i>=0;i--){
+    const b=beams[i];
+    b.t += dt;
+    if(b.t > b.life) beams.splice(i,1);
+  }
+}
+
+
+  function updateFloaters(dt){
+    for(let i=floaters.length-1;i>=0;i--){
+      const f=floaters[i];
+      f.t+=dt; f.y-=dt*34;
+      if(f.t>f.life) floaters.splice(i,1);
+    }
+  }
+
+  // ===== drawing =====
+  function drawGround(){
+    ctx.fillStyle='rgba(255,255,255,.03)';
+    ctx.fillRect(0,H()-150,W(),150);
+    ctx.strokeStyle='rgba(255,80,80,.24)';
+    ctx.setLineDash([10,10]);
+    ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(0,H()-96); ctx.lineTo(W(),H()-96); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  function drawImg(im,x,y,w,h,rot=0){
+    if(!im) return;
+    ctx.save();
+    ctx.translate(x,y);
+    ctx.rotate(rot);
+    ctx.drawImage(im,-w/2,-h/2,w,h);
+    ctx.restore();
+  }
+  function drawCannon(){
+    player.x=W()/2;
+    player.y=H()-72;
+    if(IMG.cannon){
+      // cannon image is already scaled to 320w, keep aspect
+      const w=180, h=60;
+      drawImg(IMG.cannon, player.x, player.y+10, w, h, player.angle);
+    }else{
+      ctx.fillStyle='#1ee6c8';
+      ctx.beginPath(); ctx.arc(player.x,player.y,26,0,Math.PI*2); ctx.fill();
+    }
+    // small equipped label
+    ctx.fillStyle='rgba(0,0,0,.45)';
+    ctx.fillRect(player.x-34, player.y+46, 68, 18);
+    ctx.fillStyle='rgba(0,255,204,.95)';
+    ctx.font='900 12px system-ui';
+    ctx.textAlign='center';
+    ctx.fillText(`装备 T${getEquippedTier()}`, player.x, player.y+60);
+  }
+  function drawZombies(){
+    for(const z of zombies){
+      const im = z.boss ? IMG.boss : IMG.zombie;
+      const size = z.r*2.2;
+      drawImg(im, z.x, z.y, size, size, 0);
+      // hp bar
+      const pct=clamp(z.hp/z.hpMax,0,1);
+      const bw=z.r*2.0, bh=6;
+      ctx.fillStyle='rgba(0,0,0,.35)';
+      ctx.fillRect(z.x-bw/2, z.y-z.r-16, bw, bh);
+      ctx.fillStyle=z.boss?'rgba(255,120,80,.95)':'rgba(255,230,120,.95)';
+      ctx.fillRect(z.x-bw/2, z.y-z.r-16, bw*pct, bh);
+    }
+  }
+  
+function drawBeams(){
+  for(const b of beams){
+    const a = 1 - (b.t/b.life);
+    ctx.strokeStyle = `rgba(0,255,220,${0.55*a})`;
+    ctx.lineWidth = 4 + 6*a;
+    ctx.lineCap='round';
+    ctx.beginPath();
+    ctx.moveTo(b.x1,b.y1);
+    ctx.lineTo(b.x2,b.y2);
+    ctx.stroke();
+
+    ctx.strokeStyle = `rgba(255,255,255,${0.25*a})`;
+    ctx.lineWidth = 2 + 3*a;
+    ctx.beginPath();
+    ctx.moveTo(b.x1,b.y1);
+    ctx.lineTo(b.x2,b.y2);
+    ctx.stroke();
+  }
+}
+
+function drawBullets(){
+    for(const b of bullets){
+      drawImg(IMG.bullet, b.x, b.y, 44, 22, b.ang);
+      if(b.crit){
+        ctx.fillStyle='rgba(255,255,255,.22)';
+        ctx.beginPath(); ctx.arc(b.x,b.y,10,0,Math.PI*2); ctx.fill();
+      }
+    }
+  }
+  function drawDrops(){
+  for(const d of drops){
+    if(d.type==='coin') drawImg(IMG.coin, d.x, d.y, 26, 26, 0);
+    if(d.type==='part') drawImg(IMG.part, d.x, d.y, 24, 24, 0);
+    if(d.type==='cannon'){
+      const tp = d.cType || 'normal';
+      const badge = (CANNON_TYPES[tp]?.badge)||'N';
+      ctx.save();
+      ctx.translate(d.x,d.y);
+      ctx.rotate(d.x*0.01);
+      ctx.fillStyle='rgba(0,255,204,.14)';
+      ctx.strokeStyle='rgba(0,255,204,.55)';
+      ctx.lineWidth=2;
+      ctx.beginPath(); ctx.roundRect(-16,-16,32,32,10); ctx.fill(); ctx.stroke();
+      ctx.fillStyle='rgba(0,255,204,.95)';
+      ctx.font='900 12px system-ui';
+      ctx.textAlign='center';
+      ctx.fillText(`T${d.tier||1}${badge}`,0,5);
+      ctx.restore();
+    }
+    if(d.type==='chest') drawImg(IMG.chest, d.x, d.y, 70, 58, 0);
+  }
+}
+  function drawParticles(){
+    for(const p of particles){
+      const a=1-(p.t/p.life);
+      ctx.fillStyle=`rgba(255,200,120,${0.55*a})`;
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+    }
+  }
+  function drawFloaters(){
+    ctx.textAlign='center';
+    ctx.font='900 16px system-ui';
+    for(const f of floaters){
+      const a=1-(f.t/f.life);
+      const col=f.color.includes('rgba')?f.color:f.color;
+      // simple: just use alpha on fillStyle by replacing last
+      ctx.fillStyle = col.startsWith('rgba') ? col.replace(/rgba\(([^)]+)\)/, (m,inner)=>`rgba(${inner.split(',').slice(0,3).join(',')},${a})`) : col;
+      ctx.fillText(f.txt,f.x,f.y);
+    }
+  }
+
+  // ===== upgrade with rarity + stacking levels =====
+  const RARITY = {
+    common:{name:'普通', cls:'common', w:70},
+    rare:{name:'稀有', cls:'rare', w:25},
+    epic:{name:'史诗', cls:'epic', w:5},
+  };
+  function rollRarity(){
+    const r=Math.random()*100;
+    if(r<RARITY.epic.w) return 'epic';
+    if(r<RARITY.epic.w+RARITY.rare.w) return 'rare';
+    return 'common';
+  }
+
+  const UPGRADE_POOL = [
+    {
+      key:'dmg',
+      title:'伤害强化',
+      desc:(lv,rar)=>`伤害 +${Math.round((rar==='epic'?14:rar==='rare'?10:7) + lv*3)}`,
+      apply:(lv,rar)=>{
+        const add=(rar==='epic'?14:rar==='rare'?10:7) + lv*3;
+        baseCannon.dmg += add;
+      }
+    },
+    {
+      key:'rate',
+      title:'射速强化',
+      desc:(lv,rar)=>`射速 +${((rar==='epic'?2.1:rar==='rare'?1.5:1.0) + lv*0.25).toFixed(2)}/s`,
+      apply:(lv,rar)=>{
+        const add=(rar==='epic'?2.1:rar==='rare'?1.5:1.0) + lv*0.25;
+        baseCannon.fireRate += add;
+      }
+    },
+    {
+      key:'pierce',
+      title:'穿透改造',
+      desc:(lv,rar)=>`穿透 +${(rar==='epic'?2:rar==='rare'?1:1)}（叠加）`,
+      apply:(lv,rar)=>{
+        baseCannon.pierce += (rar==='epic'?2:1);
+      }
+    },
+    {
+      key:'crit',
+      title:'暴击强化',
+      desc:(lv,rar)=>`暴击率 +${Math.round((rar==='epic'?10:rar==='rare'?7:5) + lv*1)}%`,
+      apply:(lv,rar)=>{
+        const add=((rar==='epic'?10:rar==='rare'?7:5) + lv*1)/100;
+        baseCannon.crit = clamp(baseCannon.crit + add, 0, 0.85);
+      }
+    },
+    {
+      key:'critMul',
+      title:'暴伤强化',
+      desc:(lv,rar)=>`暴击倍率 +${((rar==='epic'?0.45:rar==='rare'?0.30:0.22) + lv*0.05).toFixed(2)}`,
+      apply:(lv,rar)=>{
+        const add=(rar==='epic'?0.45:rar==='rare'?0.30:0.22) + lv*0.05;
+        baseCannon.critMul += add;
+      }
+    },
+    {
+      key:'hp',
+      title:'快速修复',
+      desc:(lv,rar)=>`回血 +${Math.round((rar==='epic'?30:rar==='rare'?22:16) + lv*4)}`,
+      apply:(lv,rar)=>{
+        const add=(rar==='epic'?30:rar==='rare'?22:16) + lv*4;
+        hp = clamp(hp + add, 0, 160);
+      }
+    },
+  ];
+
+  function pick3Upgrades(){
+    // ensure dmg/rate/pierce more likely early
+    const pool=[...UPGRADE_POOL];
+    const out=[];
+    const prefer=['dmg','rate','pierce'];
+    for(const k of prefer){
+      if(out.length>=3) break;
+      if(Math.random()<0.65){
+        const idx=pool.findIndex(x=>x.key===k);
+        if(idx>=0) out.push(pool.splice(idx,1)[0]);
+      }
+    }
+    while(out.length<3 && pool.length){
+      const idx=Math.floor(Math.random()*pool.length);
+      out.push(pool.splice(idx,1)[0]);
+    }
+    return out.map(u=>{
+      const rar=rollRarity();
+      const lv=(upLv[u.key]||0)+1; // next level shown
+      return {...u, rar, nextLv:lv};
+    });
+  }
+
+  function openUpgradePanel(){
+    state=STATE.UPGRADE;
+    const opts=pick3Upgrades();
+    overlay.innerHTML = `
+      <div class="panel">
+        <h2>升级三选一（带稀有度 + 可叠等级）</h2>
+        <div class="small">同一个升级你可以反复选，会一直叠等级。稀有度越高加成越离谱。</div>
+        <div class="grid3">
+          ${opts.map((o,i)=>`
+            <div class="card rar-${o.rar}" data-i="${i}">
+              <b>${o.title}</b>
+              <div class="tag rarTag-${o.rar}">${({'common':'普通','rare':'稀有','epic':'史诗'})[o.rar]} · Lv${o.nextLv}</div>
+              <div class="small" style="margin-top:8px">${o.desc(o.nextLv,o.rar)}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+    overlay.style.display='flex';
+    overlay.querySelectorAll('.card').forEach(card=>{
+      card.onclick=()=>{
+        const i=+card.getAttribute('data-i');
+        const o=opts[i];
+        const lv=o.nextLv;
+        upLv[o.key]=lv;
+        o.apply(lv,o.rar);
+        sfx('card');
+        overlay.style.display='none';
+        state=STATE.PLAY;
+        wave++;
+        startWave();
+      };
+    });
+  }
+
+  // ===== chest: gives coins + cannon card sometimes + then upgrades =====
+  
+function openChestPanel(){
+  overlay.innerHTML = `
+    <div class="panel">
+      <h2>宝箱</h2>
+      <div class="small">打开后：金币奖励 + <b>必掉炮卡</b>（更爽）+ 可能额外掉一张，然后进入升级三选一。</div>
+      <div class="row">
+        <div class="pill btn accent" id="openChest">打开宝箱</div>
+        <div class="pill muted">提示：两把同阶炮拖一起=合成高一阶；不同炮型同阶也能“合成走路线”</div>
+      </div>
+    </div>
+  `;
+  overlay.style.display='flex';
+  overlay.querySelector('#openChest').onclick=()=>{
+    overlay.style.display='none';
+
+    const gotCoins = 28 + Math.floor(wave*9);
+    coins += gotCoins;
+    addFloater(W()/2, 210, `+${gotCoins} 金币`, 'rgba(255,230,120,.95)');
+    sfx('pick');
+
+    // guaranteed cannon card
+    const t1 = Math.max(1, Math.min(6, 1 + Math.floor(wave/5)));
+    const tp1 = rollCannonType(false);
+    const ok1 = addCannonToInv(t1, tp1);
+    addFloater(W()/2, 238, ok1?`宝箱必掉：T${t1}（${CANNON_TYPES[tp1].name}）`:'背包满了', 'rgba(0,255,204,.95)');
+
+    // extra chance
+    const extraChance = clamp(0.30 + wave*0.01, 0, 0.65);
+    if(Math.random()<extraChance){
+      const t2 = Math.max(1, Math.min(6, t1 + (Math.random()<0.35?1:0)));
+      const tp2 = rollCannonType(false);
+      const ok2 = addCannonToInv(t2, tp2);
+      addFloater(W()/2, 260, ok2?`额外掉落：T${t2}（${CANNON_TYPES[tp2].name}）`:'背包满了', 'rgba(0,255,204,.90)');
+    }
+
+    // remove chest drop
+    for(let i=drops.length-1;i>=0;i--) if(drops[i].type==='chest') drops.splice(i,1);
+
+    openUpgradePanel();
+  };
+}
+
+
+
+  // ===== Bag / Merge UI =====
+  let dragging=null; // {from, tier}
+  let ghostEl=null;
+
+  
+function renderBag(){
+  const equip = inv[equippedSlot] || {tier:1,type:'normal'};
+  const st=cannonStatsForTier(equip.tier, equip.type);
+  overlay.innerHTML = `
+    <div class="panel">
+      <h2>背包 / 合成炮（拖拽）</h2>
+      <div class="small">
+        玩法：把 <b>两把同阶</b> 的炮拖到一起 → 合成 <b>高一阶</b>。<br/>
+        - <b>同炮型</b>：升级但保持炮型（一路把它堆到更猛）<br/>
+        - <b>不同炮型</b>：会按“配方”变成新炮型（走路线）：<b>散弹+激光→火箭</b>，<b>激光+火箭→散弹</b>，<b>火箭+散弹→激光</b><br/>
+        装备位是左上角（绿色边框），点任意一格可“装备”那把炮上场。
+      </div>
+
+      <div class="invWrap">
+        <div>
+          <div class="invGrid" id="invGrid"></div>
+          <div class="small" style="margin-top:10px;opacity:.86">
+            现在装备：<b>T${equip.tier}</b>・<b>${CANNON_TYPES[equip.type]?.name||'机炮'}</b>
+            ｜ 伤害 <b>${st.dmg.toFixed(0)}</b>
+            ｜ 射速 <b>${st.fireRate.toFixed(1)}/s</b>
+            ｜ 穿透 <b>${baseCannon.pierce}</b>
+          </div>
+        </div>
+        <div style="min-width:220px">
+          <div class="tag">掉落节奏（更上头版）</div>
+          <div class="small" style="margin-top:8px">
+            - 宝箱：<b>必掉</b>炮卡 + 概率额外掉一张<br/>
+            - 击杀：概率掉炮卡，<b>每10杀保底</b>再来一张<br/>
+            - 越到后面：散弹/激光/火箭出现更频繁<br/>
+          </div>
+          <div class="row">
+            <div class="pill btn accent" id="closeBag">返回</div>
+            <div class="pill btn danger" id="clearBag">清空背包(演示)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  overlay.style.display='flex';
+
+  const grid=overlay.querySelector('#invGrid');
+
+  for(let i=0;i<INV_SIZE;i++){
+    const it=inv[i];
+    const div=document.createElement('div');
+    div.className='slot' + (i===equippedSlot?' equip':'');
+    div.dataset.i=i;
+
+    if(it){
+      const tp=it.type||'normal';
+      const b=CANNON_TYPES[tp]?.badge||'N';
+      div.innerHTML = `
+        <div class="badge">炮</div>
+        <div class="lv">T${it.tier}${b}</div>
+      `;
+      div.style.borderStyle='solid';
+      div.style.borderColor = i===equippedSlot ? 'rgba(0,255,204,.55)' : 'rgba(255,255,255,.22)';
+    }else{
+      div.innerHTML='';
+    }
+
+    // click to equip (except empty)
+    div.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      const idx=+div.dataset.i;
+      if(inv[idx]){
+        if(idx!==equippedSlot){
+          const tmp=inv[equippedSlot];
+          inv[equippedSlot]=inv[idx];
+          inv[idx]=tmp;
+        }
+        renderBag();
+      }
+    });
+
+    // pointer drag
+    div.addEventListener('pointerdown', (e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      const idx=+div.dataset.i;
+      if(!inv[idx]) return;
+      dragging={from:idx, tier:inv[idx].tier, type:inv[idx].type||'normal'};
+      div.setPointerCapture(e.pointerId);
+
+      // ghost
+      ghostEl=document.createElement('div');
+      ghostEl.className='ghost';
+      ghostEl.style.left=e.clientX+'px';
+      ghostEl.style.top=e.clientY+'px';
+      ghostEl.style.background='rgba(0,255,204,.16)';
+      ghostEl.style.border='2px solid rgba(0,255,204,.65)';
+      ghostEl.style.borderRadius='12px';
+      ghostEl.innerHTML=`<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:900;color:#eaffff">T${dragging.tier}${CANNON_TYPES[dragging.type]?.badge||'N'}</div>`;
+      document.body.appendChild(ghostEl);
+
+      const move=(ev)=>{
+        if(!ghostEl) return;
+        ghostEl.style.left=ev.clientX+'px';
+        ghostEl.style.top=ev.clientY+'px';
+      };
+      const up=(ev)=>{
+        div.releasePointerCapture(e.pointerId);
+        window.removeEventListener('pointermove', move, true);
+        window.removeEventListener('pointerup', up, true);
+
+        if(ghostEl){ ghostEl.remove(); ghostEl=null; }
+
+        const el=document.elementFromPoint(ev.clientX, ev.clientY);
+        const slotEl = el?.closest?.('.slot');
+        if(!slotEl){ dragging=null; return; }
+
+        const to=+slotEl.dataset.i;
+        if(to===dragging.from){ dragging=null; return; }
+
+        // merge if same tier and both exist
+        if(inv[to] && inv[to].tier===dragging.tier){
+          const a=dragging.type||'normal';
+          const b=inv[to].type||'normal';
+          const nt = mergeResultType(a,b);
+          inv[to] = {tier: dragging.tier+1, type: nt};
+          inv[dragging.from]=null;
+          sfx('card');
+          addFloater(W()/2, H()/2-120, `合成成功：T${dragging.tier+1}（${CANNON_TYPES[nt]?.name||'机炮'}）`, 'rgba(0,255,204,.95)');
+          renderBag();
+          dragging=null;
+          return;
+        }
+
+        // otherwise swap
+        const tmp=inv[to];
+        inv[to]=inv[dragging.from];
+        inv[dragging.from]=tmp;
+        sfx('pick');
+        renderBag();
+        dragging=null;
+      };
+
+      window.addEventListener('pointermove', move, true);
+      window.addEventListener('pointerup', up, true);
+    });
+
+    grid.appendChild(div);
+  }
+
+  overlay.querySelector('#closeBag').onclick=()=>{
+    overlay.style.display='none';
+    state=STATE.PLAY;
+  };
+  overlay.querySelector('#clearBag').onclick=()=>{
+    for(let i=1;i<INV_SIZE;i++) inv[i]=null;
+    inv[equippedSlot]={tier:1,type:'normal'};
+    renderBag();
+  };
+}
+
+
+
+  // ===== controls =====
+  btnPause.onclick=()=>{
+    if(state===STATE.PLAY){ state=STATE.PAUSE; overlay.style.display='none'; }
+    else if(state===STATE.PAUSE){ state=STATE.PLAY; }
+    syncHUD();
+  };
+  btnBag.onclick=()=>{
+    if(state===STATE.PAUSE) return;
+    state=STATE.BAG;
+    renderBag();
+  };
+  btnMute.onclick=()=>{
+    soundOn=!soundOn;
+    btnMute.textContent=`声音：${soundOn?'开':'关'}`;
+  };
+
+  // click pick up drops
+  function canvasPos(e){
+    const r=cv.getBoundingClientRect();
+    return {x:e.clientX-r.left,y:e.clientY-r.top};
+  }
+  cv.addEventListener('pointerdown',(e)=>{
+    const p=canvasPos(e);
+    if(state===STATE.PLAY){
+      tryPickupAt(p.x,p.y);
+    }
+  });
+
+  // ===== HUD =====
+  function syncHUD(){
+    elWave.textContent=wave;
+    elScore.textContent=score|0;
+    elCoins.textContent=coins|0;
+    elTier.textContent=getEquippedTier()|0;
+    elHp.textContent=clamp(hp,0,999)|0;
+    btnPause.textContent=(state===STATE.PAUSE)?'继续':'暂停';
+    btnMute.textContent=`声音：${soundOn?'开':'关'}`;
+  }
+
+  // ===== start screen =====
+  function showStart(){
+    overlay.innerHTML = `
+      <div class="panel">
+        <h2>真·向僵尸开炮（H5）</h2>
+        <div class="small">
+          ✅ 真素材（你刚扣出来那套）<br/>
+          ✅ 自动锁最近目标 + 自动射击<br/>
+          ✅ 波次关卡｜每波：宝箱 → 升级三选一（带稀有度&可叠等级）<br/>
+          ✅ 背包真合成：拖拽两把同阶炮=合高一阶<br/><br/>
+          注意：微信里声音要先点一下才会响（平台限制）。
+        </div>
+        <div class="row">
+          <div class="pill btn accent" id="go">开始</div>
+          <div class="pill btn danger" id="muteToggle">声音：开/关</div>
+        </div>
+      </div>
+    `;
+    overlay.style.display='flex';
+    overlay.querySelector('#go').onclick=()=>{
+      overlay.style.display='none';
+      resetGame();
+    };
+    overlay.querySelector('#muteToggle').onclick=()=>{
+      soundOn=!soundOn;
+      showStart();
+      syncHUD();
+    };
+  }
+
+  function resetGame(){
+    score=0; coins=0; hp=100; wave=1;
+    zombies.length=0; bullets.length=0; drops.length=0; particles.length=0; floaters.length=0;
+    for(const k of Object.keys(upLv)) delete upLv[k];
+    Object.assign(baseCannon, {dmg:16, fireRate:6.2, bulletSpeed:980, pierce:0, crit:0.08, critMul:1.6});
+    for(let i=0;i<INV_SIZE;i++) inv[i]=null;
+    inv[equippedSlot]={tier:1,type:'normal'};
+    player.fireAcc=0;
+    state=STATE.PLAY;
+    startWave();
+    syncHUD();
+  }
+
+  // ===== main loop =====
+  let last=performance.now();
+  function loop(t){
+    requestAnimationFrame(loop);
+    const dt=clamp((t-last)/1000,0,0.033);
+    last=t;
+
+    resizeOnceIfNeeded();
+
+    ctx.clearRect(0,0,W(),H());
+    drawGround();
+
+    // position player
+    player.x=W()/2; player.y=H()-72;
+
+    if(state===STATE.START){
+      drawCannon();
+      return;
+    }
+
+    if(state===STATE.PAUSE){
+      drawParticles();
+      drawDrops();
+      drawZombies();
+      drawBeams();
+      drawBeams();
+    drawBullets();
+      drawCannon();
+      drawFloaters();
+      ctx.fillStyle='rgba(255,255,255,.85)';
+      ctx.font='900 26px system-ui';
+      ctx.textAlign='center';
+      ctx.fillText('已暂停', W()/2, H()/2);
+      return;
+    }
+
+    if(state===STATE.PLAY){
+      // spawning
+      spawnCD -= dt;
+      const interval = Math.max(0.22, 0.85 - wave*0.02);
+      if(spawnCD<=0 && spawnLeft>0){
+        spawnCD = interval;
+        maybeBossSpawn();
+        if(spawnLeft>0){
+          spawnZombie(false);
+          spawnLeft = Math.max(0, spawnLeft-1);
+        }
+      }
+
+      updateAim(dt);
+      updateFire(dt);
+      updateBullets(dt);
+      updateZombies(dt);
+      handleHits();
+      updateDrops(dt);
+      updateParticles(dt);
+      updateBeams(dt);
+      updateFloaters(dt);
+
+      // wave end check: spawnLeft==0 and no zombies left
+      if(spawnLeft<=0 && zombies.length===0){
+        finishWave();
+      }
+
+      // game over
+      if(hp<=0){
+        state=STATE.OVER;
+        overlay.innerHTML = `
+          <div class="panel">
+            <h2>你被啃没了 😵</h2>
+            <div class="small">最终：第 <b>${wave}</b> 波｜分数 <b>${score}</b>｜最高炮阶 <b>${getEquippedTier()}</b></div>
+            <div class="row" style="margin-top:12px">
+              <div class="pill btn accent" id="again">再来一把</div>
+              <div class="pill btn danger" id="home">回到开始</div>
+            </div>
+          </div>
+        `;
+        overlay.style.display='flex';
+        overlay.querySelector('#again').onclick=()=>{ overlay.style.display='none'; resetGame(); };
+        overlay.querySelector('#home').onclick=()=>{ location.reload(); };
+      }
+    }
+
+    // draw order
+    drawParticles();
+    drawDrops();
+    drawZombies();
+    drawBeams();
+    drawBullets();
+    drawCannon();
+    drawFloaters();
+
+    // chest hint
+    if(state===STATE.CHEST){
+      ctx.fillStyle='rgba(255,230,120,.85)';
+      ctx.font='900 16px system-ui';
+      ctx.textAlign='center';
+      ctx.fillText('宝箱在中间：点“打开宝箱”继续', W()/2, 96);
+    }
+
+    syncHUD();
+  }
+
+  // resize throttle
+  let lastW=0,lastH=0;
+  function resizeOnceIfNeeded(){
+    if(window.innerWidth!==lastW || window.innerHeight!==lastH){
+      lastW=window.innerWidth; lastH=window.innerHeight;
+      resize();
+    }
+  }
+
+  // ===== boot =====
+  async function boot(){
+    resize();
+    await loadAssets();
+    state=STATE.START;
+    showStart();
+    requestAnimationFrame(loop);
+  }
+  boot();
+
+})();
+</script>
+</body>
+</html>
